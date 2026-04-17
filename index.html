@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RADAR OS — Система мониторинга ГИБДД</title>
+    
+    <meta name="description" content="Интеллектуальный радар-детектор нового поколения.">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-dark: #030406;
+            --bg-light: #0a0e14;
+            --accent: #00f2ff;
+            --accent-glow: rgba(0, 242, 255, 0.4);
+            --accent-red: #ff3e3e;
+            --accent-green: #00ff66;
+            --glass: rgba(255, 255, 255, 0.02);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --nav-h: 75px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            background: radial-gradient(circle at top center, var(--bg-light) 0%, var(--bg-dark) 100%);
+            color: white;
+            font-family: 'Manrope', sans-serif;
+            line-height: 1.5;
+            padding-bottom: calc(var(--nav-h) + 40px);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* --- UI Elements --- */
+        .gradient-text {
+            background: linear-gradient(90deg, #ffffff, var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .btn-get-top {
+            text-decoration: none; background: var(--accent); color: #000;
+            padding: 8px 18px; border-radius: 12px; font-size: 13px; font-weight: 800;
+            box-shadow: 0 0 15px var(--accent-glow);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-get-top:active { transform: scale(0.95); }
+
+        /* --- Header --- */
+        .top-bar {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px 20px; position: sticky; top: 0; z-index: 100;
+            background: rgba(3, 4, 6, 0.6); backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .logo { font-weight: 800; font-size: 22px; letter-spacing: -0.5px; }
+        .logo span { color: var(--accent); text-shadow: 0 0 10px var(--accent-glow); }
+
+        /* --- Hero & Radar --- */
+        .hero { padding: 40px 20px 20px; text-align: center; }
+        .badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 14px; background: rgba(0, 242, 255, 0.05);
+            border: 1px solid rgba(0, 242, 255, 0.2);
+            color: var(--accent); border-radius: 30px; font-size: 11px; font-weight: 800; 
+            margin-bottom: 25px; letter-spacing: 1px;
+            box-shadow: inset 0 0 10px rgba(0, 242, 255, 0.05);
+        }
+        .badge::before {
+            content: ''; display: block; width: 6px; height: 6px; 
+            background: var(--accent); border-radius: 50%;
+            box-shadow: 0 0 8px var(--accent);
+            animation: pulse-dot 2s infinite;
+        }
+
+        h1 { font-size: 36px; font-weight: 800; margin-bottom: 10px; line-height: 1.1; }
+
+        .radar-container {
+            width: 300px; height: 300px; margin: 40px auto;
+            border: 2px solid rgba(0, 242, 255, 0.3); border-radius: 50%;
+            position: relative; overflow: hidden;
+            background: 
+                linear-gradient(90deg, transparent 49.5%, rgba(0, 242, 255, 0.15) 50%, transparent 50.5%),
+                linear-gradient(0deg, transparent 49.5%, rgba(0, 242, 255, 0.15) 50%, transparent 50.5%),
+                radial-gradient(circle, transparent 33%, rgba(0, 242, 255, 0.1) 34%, transparent 35%),
+                radial-gradient(circle, transparent 66%, rgba(0, 242, 255, 0.1) 67%, transparent 68%),
+                radial-gradient(circle, rgba(0, 242, 255, 0.05) 0%, transparent 70%);
+            box-shadow: 0 0 40px rgba(0, 242, 255, 0.1), inset 0 0 40px rgba(0, 242, 255, 0.1);
+        }
+        
+        .scan-line {
+            position: absolute; width: 100%; height: 100%; top: 0; left: 0;
+            background: conic-gradient(from 0deg, rgba(0, 242, 255, 0) 70%, rgba(0, 242, 255, 0.1) 90%, rgba(0, 242, 255, 0.6) 100%);
+            border-radius: 50%;
+            animation: rotate 3s linear infinite;
+        }
+        .scan-line::after {
+            content: ''; position: absolute;
+            width: 50%; height: 2px; background: var(--accent);
+            top: 0; left: 50%; transform-origin: left bottom;
+            box-shadow: 0 0 10px var(--accent);
+        }
+
+        .ping {
+            position: absolute; width: 10px; height: 10px; border-radius: 50%;
+            background: var(--accent-red); 
+            transform: translate(-50%, -50%);
+            animation: ping-pulse 2.5s ease-out forwards;
+        }
+
+        /* --- Event Log --- */
+        .log-box {
+            background: rgba(0, 0, 0, 0.6); 
+            border: 1px solid rgba(0, 255, 102, 0.2);
+            margin: 0 20px 15px; padding: 15px; border-radius: 16px;
+            font-family: 'JetBrains Mono', monospace; font-size: 12px;
+            height: 110px; overflow: hidden; text-align: left;
+            position: relative;
+            box-shadow: inset 0 0 20px rgba(0, 255, 102, 0.05);
+        }
+        .log-box::before {
+            content: 'SYSTEM.LOG'; position: absolute; top: 0; right: 10px;
+            font-size: 9px; color: rgba(0, 255, 102, 0.4); font-weight: 700;
+        }
+        .log-entry { 
+            color: var(--accent-green); margin-bottom: 6px; 
+            text-shadow: 0 0 5px rgba(0, 255, 102, 0.4);
+            animation: typeIn 0.3s ease-out forwards;
+        }
+
+        /* --- Threat Level Indicator --- */
+        .threat-panel {
+            margin: 0 20px 30px; padding: 15px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .threat-header {
+            display: flex; justify-content: space-between;
+            font-size: 11px; font-weight: 800; color: #888; letter-spacing: 1px;
+        }
+        .threat-status { font-family: 'JetBrains Mono', monospace; color: var(--accent-green); transition: color 0.3s; }
+        .threat-bar-bg {
+            width: 100%; height: 6px; background: rgba(255,255,255,0.1);
+            border-radius: 10px; overflow: hidden;
+        }
+        .threat-bar-fill {
+            height: 100%; width: 10%; background: var(--accent-green);
+            border-radius: 10px; transition: width 0.5s ease, background 0.3s ease;
+            box-shadow: 0 0 10px var(--accent-green);
+        }
+
+        /* --- Benefits --- */
+        .section-title { padding: 40px 20px 25px; text-align: center; font-size: 26px; font-weight: 800; }
+        
+        .grid { 
+            display: grid; 
+            grid-template-columns: 1.2fr 0.8fr; 
+            gap: 15px; 
+            padding: 0 20px; 
+        }
+        
+        .card { 
+            background: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+            border: 1px solid var(--glass-border); padding: 25px 20px; 
+            border-radius: 24px; backdrop-filter: blur(10px);
+            transition: transform 0.3s, border-color 0.3s;
+        }
+        .card:active { transform: scale(0.98); border-color: var(--accent); }
+        .card h3 { font-size: 16px; color: var(--accent); margin-bottom: 8px; font-weight: 800; }
+        .card p { font-size: 12px; color: #999; line-height: 1.4; }
+
+        /* --- CTA Button --- */
+        .cta-wrap { padding: 30px 20px; }
+        .btn-main {
+            display: flex; justify-content: center; align-items: center; gap: 10px;
+            width: 100%; padding: 22px; 
+            background: linear-gradient(135deg, var(--accent), #0055ff);
+            color: black; text-decoration: none; border-radius: 20px;
+            font-weight: 800; font-size: 18px; 
+            box-shadow: 0 15px 35px rgba(0, 114, 255, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-main:active { transform: translateY(2px); box-shadow: 0 5px 15px rgba(0, 114, 255, 0.3); }
+
+        /* --- Cookie Banner --- */
+        .cookie-banner {
+            position: fixed;
+            bottom: -150px; /* Hidden initially */
+            left: 5%;
+            width: 90%;
+            background: rgba(10, 14, 20, 0.95);
+            backdrop-filter: blur(25px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 15px;
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            transition: bottom 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .cookie-banner.show {
+            bottom: 110px; /* Показываем прямо над нижним навигационным меню */
+        }
+        .cookie-text { font-size: 11px; color: #bbb; line-height: 1.4; }
+        .cookie-btns { display: flex; gap: 10px; }
+        .cookie-btn {
+            flex: 1; padding: 12px; border: none; border-radius: 12px;
+            font-size: 11px; font-weight: 800; cursor: pointer;
+            font-family: 'Manrope', sans-serif; transition: transform 0.2s;
+        }
+        .cookie-btn:active { transform: scale(0.95); }
+        .cookie-btn.accept { background: var(--accent); color: black; box-shadow: 0 0 10px rgba(0, 242, 255, 0.2); }
+        .cookie-btn.reject { background: rgba(255, 255, 255, 0.05); color: white; border: 1px solid var(--glass-border); }
+
+        /* --- Bottom Nav --- */
+        .bottom-nav {
+            position: fixed; bottom: 15px; left: 5%; width: 90%; height: var(--nav-h);
+            background: rgba(10, 14, 20, 0.85); backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 25px;
+            display: grid; grid-template-columns: 1fr 1fr; z-index: 1000;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        .nav-item {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #666; text-decoration: none; font-size: 12px; font-weight: 800;
+            transition: color 0.3s;
+        }
+        .nav-item.active { color: var(--accent); text-shadow: 0 0 10px var(--accent-glow); }
+        .nav-item span { font-size: 22px; margin-bottom: 4px; transition: transform 0.3s; filter: grayscale(100%); opacity: 0.6; }
+        .nav-item.active span { transform: translateY(-2px); filter: grayscale(0%); opacity: 1; }
+
+        /* --- Pages & Footer --- */
+        .contacts { padding: 40px 20px; text-align: center; }
+        .contact-link { color: var(--accent); font-weight: 800; text-decoration: none; display: block; margin-top: 10px; font-size: 16px; }
+
+        .page {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-dark); z-index: 2000; padding: 40px 20px;
+            overflow-y: auto; display: none; backdrop-filter: blur(30px);
+        }
+        .page-content h2 { color: var(--accent); margin-bottom: 20px; font-size: 24px; }
+        .page-content p { font-size: 14px; color: #bbb; margin-bottom: 15px; }
+        .btn-back {
+            background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: white;
+            padding: 10px 20px; border-radius: 12px; margin-bottom: 30px; font-weight: 600;
+            display: flex; align-items: center; gap: 8px; font-family: 'Manrope';
+        }
+
+        .footer-legal { padding: 20px; text-align: center; border-top: 1px solid var(--glass-border); margin-top: 20px; }
+        .legal-link { color: #666; font-size: 11px; margin: 0 8px; text-decoration: none; border-bottom: 1px dashed #444;}
+        
+        @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes pulse-dot { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        @keyframes typeIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes ping-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 62, 62, 0.8); opacity: 1; }
+            70% { box-shadow: 0 0 0 25px rgba(255, 62, 62, 0); opacity: 0.8; }
+            100% { box-shadow: 0 0 0 0 rgba(255, 62, 62, 0); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="main-view">
+        <header class="top-bar">
+            <div class="logo">RADAR<span>OS</span></div>
+            <a href="https://e.mail.ru/" class="btn-get-top">ПОЛУЧИТЬ</a>
+        </header>
+
+        <section class="hero">
+            <div class="badge">V 2.6 ACTIVE SCANNING</div>
+            <h1>Видьте дороги <br><span class="gradient-text">насквозь</span></h1>
+            
+            <div class="radar-container" id="radar">
+                <div class="scan-line"></div>
+            </div>
+
+            <div class="log-box" id="log">
+                <div class="log-entry">> Инициализация спутников...</div>
+            </div>
+
+            <div class="threat-panel">
+                <div class="threat-header">
+                    <span>СТАТУС СЕКТОРА</span>
+                    <span class="threat-status" id="threat-text">ЧИСТО</span>
+                </div>
+                <div class="threat-bar-bg">
+                    <div class="threat-bar-fill" id="threat-bar"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid">
+            <div class="card">
+                <h3>Точность 99%</h3>
+                <p>База обновляется в реальном времени.</p>
+            </div>
+            <div class="card">
+                <h3>Скрытые посты</h3>
+                <p>Находим экипажи без опознавательных знаков.</p>
+            </div>
+        </section>
+
+        <section id="features">
+            <h2 class="section-title">Функции системы</h2>
+            <div style="padding: 0 20px; display: flex; flex-direction: column; gap: 10px;">
+                <div class="card" style="width: 100%;">
+                    <h3>Интеллектуальный фильтр</h3>
+                    <p>Отсеиваем ложные срабатывания и неработающие камеры автоматически.</p>
+                </div>
+                <div class="card" style="width: 100%;">
+                    <h3>Режим «Трасса»</h3>
+                    <p>Увеличенная дистанция обнаружения до 5 км для скоростных шоссе.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="contacts">
+            <p style="color: #666; font-size: 14px;">Есть вопросы? Пишите нам:</p>
+            <a href="mailto:support@radar-os.ru" class="contact-link">support@radar-os.ru</a>
+        </section>
+
+        <div class="cta-wrap">
+            <a href="https://e.mail.ru/" class="btn-main">ПОДКЛЮЧИТЬ RADAR OS</a>
+        </div>
+
+        <footer class="footer-legal">
+            <a href="javascript:void(0)" onclick="openPage('page-rules')" class="legal-link">Оферта</a>
+            <a href="javascript:void(0)" onclick="openPage('page-privacy')" class="legal-link">Приватность</a>
+            <a href="javascript:void(0)" onclick="openPage('page-req')" class="legal-link">Реквизиты</a>
+            <p style="font-size: 10px; color: #444; margin-top: 15px;">© 2026 RADAR OS TECH. Не является спецсредством.</p>
+        </footer>
+    </div>
+
+    <div id="cookie-banner" class="cookie-banner">
+        <div class="cookie-text">
+            Мы используем только базовые технические файлы cookie для корректной работы сайта. Никакого сбора личных данных или отслеживания перемещений.
+        </div>
+        <div class="cookie-btns">
+            <button class="cookie-btn accept" onclick="handleCookies('accept')">ПРИНЯТЬ</button>
+            <button class="cookie-btn reject" onclick="handleCookies('reject')">ОТКЛОНИТЬ</button>
+        </div>
+    </div>
+
+    <div id="page-rules" class="page">
+        <button class="btn-back" onclick="closePages()">← Назад</button>
+        <div class="page-content">
+            <h2>Пользовательское соглашение</h2>
+            <p>1. Сервис предоставляет информацию о дорожной обстановке на основе открытых данных.</p>
+            <p>2. Администрация не несет ответственности за штрафы, полученные пользователем.</p>
+            
+        </div>
+    </div>
+
+    <div id="page-privacy" class="page">
+        <button class="btn-back" onclick="closePages()">← Назад</button>
+        <div class="page-content">
+            <h2>Политика конфиденциальности</h2>
+            <p>Мы уважаем вашу приватность. Наш сервис <strong>не собирает</strong>, не хранит и не передает третьим лицам ваши персональные данные, геолокацию или историю маршрутов.</p>
+            <p>Система работает автономно на вашем устройстве, используя информацию исключительно для разового отображения на экране. Мы не требуем регистрации и не ведем логов ваших действий.</p>
+        </div>
+    </div>
+
+    <div id="page-req" class="page">
+        <button class="btn-back" onclick="closePages()">← Назад</button>
+        <div class="page-content">
+            <h2>Реквизиты</h2>
+            <p>ИП "Кулагин Трофим Ерофеевич"</p>
+            <p>ИНН: 373365929174</p>
+            <p>Адрес: 123112, г. Москва, Пресненская наб., 12 (Башня Федерация)</p>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <a href="#main-view" class="nav-item active" onclick="closePages()">
+            <span>📡</span> Радар
+        </a>
+        <a href="#features" class="nav-item" onclick="closePages()">
+            <span>⚙️</span> Функции
+        </a>
+    </nav>
+
+    <script>
+        // --- Cookie Banner Logic ---
+        document.addEventListener("DOMContentLoaded", () => {
+            const banner = document.getElementById('cookie-banner');
+            // Проверяем, нажимал ли юзер кнопки ранее
+            if (!localStorage.getItem('radar_os_cookies')) {
+                setTimeout(() => {
+                    banner.classList.add('show');
+                }, 1000); // Показываем баннер через 1 секунду после загрузки
+            }
+        });
+
+        function handleCookies(action) {
+            const banner = document.getElementById('cookie-banner');
+            banner.classList.remove('show'); // Прячем баннер
+            localStorage.setItem('radar_os_cookies', action); // Сохраняем выбор в браузере
+        }
+
+        // --- Radar Logic & Threat Level ---
+        const radar = document.getElementById('radar');
+        const log = document.getElementById('log');
+        const threatText = document.getElementById('threat-text');
+        const threatBar = document.getElementById('threat-bar');
+        
+        let currentThreat = 10; 
+
+        const eventPool = [
+            { text: "Камера 'Скат' обнаружена: М-4", type: "danger" },
+            { text: "Мобильный патруль: ТТК (внутр.)", type: "danger" },
+            { text: "Пост ДПС: выезд на шоссе Энтузиастов", type: "danger" },
+            { text: "Обнаружена тренога: 44-й км МКАД", type: "warning" },
+            { text: "Обновление базы данных РФ...", type: "info" },
+            { text: "Чистый участок: 5км", type: "info" }
+        ];
+
+        setInterval(() => {
+            if(currentThreat > 10) {
+                currentThreat -= 5;
+                updateThreatUI();
+            }
+        }, 1000);
+
+        function updateThreatUI() {
+            threatBar.style.width = currentThreat + '%';
+            
+            if(currentThreat < 40) {
+                threatText.innerText = 'ЧИСТО';
+                threatText.style.color = 'var(--accent-green)';
+                threatBar.style.background = 'var(--accent-green)';
+                threatBar.style.boxShadow = '0 0 10px var(--accent-green)';
+            } else if (currentThreat < 75) {
+                threatText.innerText = 'ВНИМАНИЕ';
+                threatText.style.color = '#ffaa00';
+                threatBar.style.background = '#ffaa00';
+                threatBar.style.boxShadow = '0 0 10px #ffaa00';
+            } else {
+                threatText.innerText = 'ОПАСНОСТЬ';
+                threatText.style.color = 'var(--accent-red)';
+                threatBar.style.background = 'var(--accent-red)';
+                threatBar.style.boxShadow = '0 0 10px var(--accent-red)';
+            }
+        }
+
+        function spawnPing() {
+            const event = eventPool[Math.floor(Math.random() * eventPool.length)];
+            const ping = document.createElement('div');
+            ping.className = 'ping';
+            
+            const angle = Math.random() * Math.PI * 2;
+            const dist = Math.random() * 110; 
+            const x = 150 + dist * Math.cos(angle); 
+            const y = 150 + dist * Math.sin(angle);
+            
+            ping.style.left = x + 'px';
+            ping.style.top = y + 'px';
+            
+            if (event.type === 'info') {
+                ping.style.background = '#00f2ff';
+                ping.style.boxShadow = '0 0 10px #00f2ff';
+                if(currentThreat > 20) currentThreat -= 10; 
+            } else if (event.type === 'warning') {
+                ping.style.background = '#ffaa00';
+                currentThreat += 30;
+            } else {
+                ping.style.background = 'var(--accent-red)';
+                currentThreat += 45;
+            }
+
+            if(currentThreat > 100) currentThreat = 100;
+            updateThreatUI();
+
+            radar.appendChild(ping);
+            
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerText = '> ' + event.text;
+            
+            if(event.type === 'danger') entry.style.color = '#ff3e3e';
+            if(event.type === 'warning') entry.style.color = '#ffaa00';
+
+            log.prepend(entry);
+            if(log.childNodes.length > 5) log.lastChild.remove();
+            
+            setTimeout(() => ping.remove(), 2500);
+        }
+
+        setInterval(() => {
+            if(Math.random() > 0.4) spawnPing();
+        }, 2000);
+
+        // --- Page Navigation ---
+        function openPage(id) {
+            document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+            document.getElementById(id).style.display = 'block';
+            window.scrollTo(0,0);
+        }
+
+        function closePages() {
+            document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+        }
+
+        const navItems = document.querySelectorAll('.nav-item');
+        navItems.forEach(item => {
+            item.addEventListener('click', () => {
+                navItems.forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>
